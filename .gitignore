@@ -1,0 +1,12 @@
+# MetaTrader build artifacts
+*.ex5
+*.ex4
+
+# MetaEditor / local files
+*.log
+*.set
+*.ini
+
+# OS files
+.DS_Store
+Thumbs.db
