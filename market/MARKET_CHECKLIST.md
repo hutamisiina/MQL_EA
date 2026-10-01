@@ -4,7 +4,9 @@ Prepared against the MQL5 Market rules and publication guidance checked on 2026-
 
 ## Prepared in this repository
 
-- Product name candidate: `Adaptive Hedge Basket`
+- Product name: `Adaptive Hedge Basket`
+- Pricing plan: one-month rental only at `USD 49`
+- Proposed activations: `5`
 - Market source candidate: `source/AdaptiveHedgeBasket.mq5`
 - English product description: `descriptions/PRODUCT_DESCRIPTION_EN.md`
 - Japanese product description: `descriptions/PRODUCT_DESCRIPTION_JA.md`
@@ -18,9 +20,9 @@ Prepared against the MQL5 Market rules and publication guidance checked on 2026-
 
 ## Required before submission
 
-- [ ] Confirm the final product name.
-- [ ] Choose the sale price. Paid Market products currently have a minimum price of USD 30.
-- [ ] Choose the number of activations between 5 and 20.
+- [x] Confirm the final product name: `Adaptive Hedge Basket`.
+- [x] Choose the price: one-month rental at `USD 49`.
+- [x] Choose the initial number of activations: `5`.
 - [ ] Complete MQL5 Seller registration and identity verification in English.
 - [ ] Compile `AdaptiveHedgeBasket.mq5` in the latest MetaEditor and confirm zero errors and zero warnings.
 - [ ] Produce the final EX5. Only the compiled EX5 is uploaded as the Market product.
@@ -43,7 +45,7 @@ Prepared against the MQL5 Market rules and publication guidance checked on 2026-
 - Product support must use MQL5 comments or the MQL5 messaging system.
 - Do not publish separate products that only change symbols, timeframes or input presets.
 
-The Exness affiliate link in the public GitHub README must not be copied into the MQL5 Market description or embedded in the EA. Market rules prohibit third-party links and broker affiliate advertising in products.
+The Exness affiliate link in the GitHub README must not be copied into the MQL5 Market description or embedded in the EA. Market rules prohibit third-party links and broker affiliate advertising in products.
 
 ## Source visibility
 
