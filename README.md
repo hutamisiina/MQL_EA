@@ -5,7 +5,7 @@ MetaTrader 5（MT5）向けの、複数ポジションをまとめて管理す�
 買いと売りを組み合わせた疑似ストラドル／両建ての考え方をベースに、短期トレンド方向へポジションを追加し、バスケット全体の損益で決済します。
 
 > [!WARNING]
-> このEAは仮説検証用です。利益を保証するものではありません。初期設定では損失額による停止が無効で、最大ポジション数も非常に大きく設定されています。必ずストラテジーテスターとデモ口座で検証し、ご自身の責任で使用してください。
+> このEAは仮説検証用です。利益を保証するものではありません。v0.70の初期設定では損失額による停止が無効で、最大100ポジションまで追加される可能性があります。必ずストラテジーテスターとデモ口座で検証し、ご自身の責任で使用してください。
 
 ## 主な特徴
 
@@ -20,50 +20,57 @@ MetaTrader 5（MT5）向けの、複数ポジションをまとめて管理す�
 
 ## 売買ロジックの概要
 
-1. ポジションがない場合、最初にBUYを1つ開きます。
+1. ポジションがない場合、直前のM1終値とEMAを比較し、EMAより上ならBUY、下ならSELLを開きます。
 2. `InpUseStartupSequence=true` の場合、次のM1足でBUYとSELLを1つずつ追加します。
 3. 以降は、直前の終値がEMAより上ならBUY、下ならSELLを追加します。
 4. BUY数とSELL数が同じ場合は、直前の終値とSMAの距離が設定値に達するまで待機します。
 5. バスケット全体の利益が開始額に達すると、利益のピークを追跡します。
 6. 利益がトレーリング下限まで戻ると、全ポジションをまとめて決済します。
 
-現在のv0.6では `InpUseStartupSequence` の初期値は `false` です。疑似ストラドルの開始シーケンスを使用する場合は `true` に変更してください。
+v0.70では `InpUseStartupSequence` の初期値は `true` です。初回ポジションの方向にかかわらず、2本目のM1足でBUYとSELLを1つずつ追加します。
 
 ## ファイル
 
 ```text
 MQL_EA/
 ├── Experts/
-│   └── TF_CB_Hypothesis_v06.mq5
+│   ├── TF_CB_Hypothesis_v06.mq5
+│   └── TF_CB_Hypothesis_v07.mq5
+├── market/
+│   ├── assets/
+│   ├── descriptions/
+│   ├── source/
+│   └── MARKET_CHECKLIST.md
+├── CHANGELOG.md
 ├── .gitignore
 └── README.md
 ```
 
 ## 導入方法
 
-1. [TF_CB_Hypothesis_v06.mq5](Experts/TF_CB_Hypothesis_v06.mq5) をダウンロードします。
+1. 最新版の [TF_CB_Hypothesis_v07.mq5](Experts/TF_CB_Hypothesis_v07.mq5) をダウンロードします。
 2. MT5で「ファイル」→「データフォルダを開く」を選択します。
 3. `MQL5/Experts` フォルダへ `.mq5` ファイルをコピーします。
 4. MetaEditorでファイルを開き、コンパイルします。
 5. MT5のナビゲータを更新し、EAを対象チャートへ適用します。
 6. 自動売買を有効にします。
 
-初期設定ではM1チャート専用です。また、BUYとSELLの同時保有および `Close By` を利用するため、ヘッジ口座を推奨します。銘柄側が `Close By` に対応していない場合は通常決済へフォールバックします。
+初期設定ではM1チャート専用です。また、BUYとSELLの同時保有および `Close By` を利用するため、ヘッジ口座が必要です。v0.70原本では `Close By` 非対応時に両建て決済が再試行状態のまま残るため、対応銘柄で使用してください。Market販売候補v1.00では通常決済へのフォールバックを追加しています。
 
 ## 主なパラメータ
 
 | パラメータ | 初期値 | 内容 |
 |---|---:|---|
 | `InpLots` | `0.01` | 1注文あたりのロット数 |
-| `InpUseStartupSequence` | `false` | 2本目にBUYとSELLを追加する開始シーケンス |
+| `InpUseStartupSequence` | `true` | 2本目にBUYとSELLを追加する開始シーケンス |
 | `InpEMA_Period` | `10` | 売買方向を判定するEMA期間 |
 | `InpSMA_Period` | `7` | 両建て待機解除に使うSMA期間 |
 | `InpHedgeReleaseDistance` | `0.80` | BUY・SELL同数時に売買を再開する価格距離 |
-| `InpTrailStartProfit` | `1.0` | バスケットトレーリング開始利益（口座通貨） |
-| `InpTrailFixedDistance` | `0.3` | 利益ピークからの固定トレーリング幅 |
+| `InpTrailStartProfit` | `100.0` | バスケットトレーリング開始利益（口座通貨） |
+| `InpTrailFixedDistance` | `30.0` | 利益ピークからの固定トレーリング幅 |
 | `InpTrailPercent` | `20.0` | 利益ピークに対するトレーリング幅（%） |
 | `InpBasketLossMoney` | `0.0` | バスケット損失上限。`0`は無効 |
-| `InpMaxPositions` | `9999999` | このEAが保有できる最大ポジション数 |
+| `InpMaxPositions` | `100` | このEAが保有できる最大ポジション数 |
 | `InpUseCloseByForHedge` | `true` | 両建て部分をClose Byで相殺する |
 
 `InpBasketProfitMoney` は、`InpUseBasketTrailing=false` の場合のみ固定利益確定として使用されます。
