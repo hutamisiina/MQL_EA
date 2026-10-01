@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.01 - 2026-10-01
+
+- Renamed the current EA to `AdaptiveHedgeBasket_v1.01.mq5`.
+- Changed adaptive exposure calculations from position counts to actual BUY and SELL lot volumes.
+- Added validation of trade-server return codes and executed deal IDs.
+- Added combined margin checks and rollback protection for the initial BUY/SELL hedge layer.
+- Persisted the active trailing peak and floor across terminal or VPS restarts.
+- Stopped initialization on non-hedging accounts.
+- Kept normal-close fallback when Close By is disabled or unavailable.
+
 ## 0.70 - 2026-10-01
 
 - Changed the first basket entry from a fixed BUY to the direction of the previous M1 close relative to EMA 10.
