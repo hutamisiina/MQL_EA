@@ -45,8 +45,8 @@ Prepared against the MQL5 Market rules and publication guidance checked on 2026-
 
 The Exness affiliate link in the public GitHub README must not be copied into the MQL5 Market description or embedded in the EA. Market rules prohibit third-party links and broker affiliate advertising in products.
 
-## Source visibility decision
+## Source visibility
 
-The GitHub repository is currently public. Publishing the Market source candidate to the public repository makes the source code freely downloadable even if the compiled EX5 is sold through MQL5 Market. Before commercial launch, decide whether to make the repository private or keep only non-commercial documentation in the public repository.
+The GitHub repository was confirmed as private on 2026-10-01. Keep it private while it contains the Market source candidate. If a public repository is needed later, publish only selected documentation or other files intentionally released to the public.
 
-Changing a GitHub repository from public to private does not remove copies that may already have been cloned or cached.
+Changing a repository from public to private does not remove copies that may already have been cloned or cached while it was public.
