@@ -9,6 +9,9 @@
 - Persisted the active trailing peak and floor across terminal or VPS restarts.
 - Stopped initialization on non-hedging accounts.
 - Kept normal-close fallback when Close By is disabled or unavailable.
+- Changed the default initial hedge setting to disabled.
+- Changed the default trailing start/fixed distance to 1.0/0.3 and documented lot-based tuning.
+- Changed the default maximum position count to 9,999,999.
 
 ## 0.70 - 2026-10-01
 

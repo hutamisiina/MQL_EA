@@ -16,7 +16,7 @@ input double InpLots                 = 0.01;
 // Basket startup:
 // 1st M1: enter in the EMA direction.
 // 2nd M1: optionally add one BUY and one SELL to create an initial hedge layer.
-input bool   InpUseInitialHedge      = true;
+input bool   InpUseInitialHedge      = false;
 
 // Direction logic
 input int    InpEMA_Period           = 10;
@@ -38,8 +38,11 @@ input double InpHedgeReleaseDistance = 0.80;
 //
 // The floor never falls below TrailStartProfit once trailing has activated.
 input bool   InpUseBasketTrailing     = true;
-input double InpTrailStartProfit      = 100.0;
-input double InpTrailFixedDistance    = 30.0;
+// Default 1.0 assumes InpLots=0.01. Adjust roughly in proportion to InpLots.
+input double InpTrailStartProfit      = 1.0;
+// Default 0.3 is tuned for TrailStartProfit=1.0. Re-tune it when changing
+// TrailStartProfit (30% of the start profit is the initial reference).
+input double InpTrailFixedDistance    = 0.3;
 input double InpTrailPercent          = 20.0;
 
 // Net-position adaptive trailing.
@@ -67,7 +70,7 @@ input double InpBasketProfitMoney     = 100.0;
 input double InpBasketLossMoney       = 0.0;
 
 // Safety / test controls
-input int    InpMaxPositions         = 100;
+input int    InpMaxPositions         = 9999999;
 input bool   InpWarnIfChartNotM1     = true;
 input bool   InpPrintDebug           = true;
 
