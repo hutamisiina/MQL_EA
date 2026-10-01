@@ -31,10 +31,10 @@ input double InpHedgeReleaseDistance = 0.80;
 // Instead, remember the peak basket profit and close after a pullback.
 //
 // Example:
-// start=100, fixed distance=30, percent=20
-// peak=100  -> floor=100 (minimum locked profit)
-// peak=150  -> floor=120
-// peak=300  -> floor=240
+// start=1.0, fixed distance=0.3, percent=20
+// peak=1.0 -> floor=1.0 (minimum locked profit)
+// peak=1.5 -> floor=1.2
+// peak=3.0 -> floor=2.4
 //
 // The floor never falls below TrailStartProfit once trailing has activated.
 input bool   InpUseBasketTrailing     = true;
