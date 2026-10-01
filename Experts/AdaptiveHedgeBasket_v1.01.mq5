@@ -779,16 +779,24 @@ bool OpenInitialHedgeLayer()
       MathAbs(buy_volume - InpLots) > 0.0000001)
    {
       Debug("Initial hedge BUY was not fully opened. Rolling it back.");
-      CloseSinglePositionConfirmed(new_buy_ticket,
-                                   "Initial hedge BUY rollback");
+      bool rollback_ok =
+         (new_buy_ticket != 0 &&
+          CloseSinglePositionConfirmed(new_buy_ticket,
+                                       "Initial hedge BUY rollback"));
+
+      if(!rollback_ok)
+         StartBasketClosing("INITIAL HEDGE BUY ROLLBACK FAILED");
+
       return false;
    }
 
    if(!OpenSell("HYP_SECOND_SELL"))
    {
       Debug("Initial hedge SELL failed. Rolling back BUY.");
-      CloseSinglePositionConfirmed(new_buy_ticket,
-                                   "Initial hedge BUY rollback");
+      if(!CloseSinglePositionConfirmed(new_buy_ticket,
+                                       "Initial hedge BUY rollback"))
+         StartBasketClosing("INITIAL HEDGE BUY ROLLBACK FAILED");
+
       return false;
    }
 
@@ -800,10 +808,17 @@ bool OpenInitialHedgeLayer()
       MathAbs(sell_volume - InpLots) > 0.0000001)
    {
       Debug("Initial hedge SELL was not fully opened. Rolling back both legs.");
-      CloseSinglePositionConfirmed(new_sell_ticket,
-                                   "Initial hedge SELL rollback");
-      CloseSinglePositionConfirmed(new_buy_ticket,
-                                   "Initial hedge BUY rollback");
+      bool sell_rollback_ok =
+         (new_sell_ticket != 0 &&
+          CloseSinglePositionConfirmed(new_sell_ticket,
+                                       "Initial hedge SELL rollback"));
+      bool buy_rollback_ok =
+         CloseSinglePositionConfirmed(new_buy_ticket,
+                                      "Initial hedge BUY rollback");
+
+      if(!sell_rollback_ok || !buy_rollback_ok)
+         StartBasketClosing("INITIAL HEDGE ROLLBACK FAILED");
+
       return false;
    }
 

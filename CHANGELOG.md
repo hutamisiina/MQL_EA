@@ -5,7 +5,7 @@
 - Renamed the current EA to `AdaptiveHedgeBasket_v1.01.mq5`.
 - Changed adaptive exposure calculations from position counts to actual BUY and SELL lot volumes.
 - Added validation of trade-server return codes and executed deal IDs.
-- Added combined margin checks and rollback protection for the initial BUY/SELL hedge layer.
+- Added combined margin checks and rollback protection for the initial BUY/SELL hedge layer, with full-basket close retries if rollback itself fails.
 - Persisted the active trailing peak and floor across terminal or VPS restarts.
 - Stopped initialization on non-hedging accounts.
 - Kept normal-close fallback when Close By is disabled or unavailable.
