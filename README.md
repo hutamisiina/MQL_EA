@@ -36,11 +36,6 @@ MQL_EA/
 ├── Experts/
 │   ├── TF_CB_Hypothesis_v06.mq5
 │   └── TF_CB_Hypothesis_v07.mq5
-├── market/
-│   ├── assets/
-│   ├── descriptions/
-│   ├── source/
-│   └── MARKET_CHECKLIST.md
 ├── CHANGELOG.md
 ├── .gitignore
 └── README.md
@@ -55,7 +50,7 @@ MQL_EA/
 5. MT5のナビゲータを更新し、EAを対象チャートへ適用します。
 6. 自動売買を有効にします。
 
-初期設定ではM1チャート専用です。また、BUYとSELLの同時保有および `Close By` を利用するため、ヘッジ口座が必要です。v0.70原本では `Close By` 非対応時に両建て決済が再試行状態のまま残るため、対応銘柄で使用してください。Market販売候補v1.00では通常決済へのフォールバックを追加しています。
+初期設定ではM1チャート専用です。また、BUYとSELLの同時保有および `Close By` を利用するため、ヘッジ口座が必要です。v0.70では `Close By` 非対応時に両建て決済が再試行状態のまま残るため、対応銘柄で使用してください。
 
 ## 主なパラメータ
 
