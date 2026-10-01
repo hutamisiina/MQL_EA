@@ -103,6 +103,6 @@ Exnessの口座を新しく開設する場合は、よろしければ以下の�
 
 ## ライセンス
 
-MIT License
+[MIT License](LICENSE)
 
 Copyright (c) 2026 hutamisiina
