@@ -63,7 +63,7 @@ input double InpMinTrailMultiplier    = 0.40;
 
 // Optional legacy fixed TP. Used only when trailing is disabled.
 // Set 0 to disable.
-input double InpBasketProfitMoney     = 100.0;
+input double InpBasketProfitMoney     = 1.0;
 
 // Unknown original loss-exit rule, therefore disabled by default.
 // Use a positive number to enable absolute-money stop.
