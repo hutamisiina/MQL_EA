@@ -79,6 +79,9 @@ input int    InpPositionCountStop     = 100;
 
 // Safety / test controls
 input int    InpMaxPositions         = 9999999;
+// Block new entries from Friday 23:59 JST through Sunday 23:59 JST.
+// Existing positions continue to be managed and closed as usual.
+input bool   InpUseWeekendEntryGuard = true;
 input bool   InpWarnIfChartNotM1     = true;
 input bool   InpPrintDebug           = true;
 
@@ -645,8 +648,44 @@ void ProcessBasketClosing()
       FinishBasketClosing();
 }
 
+datetime CurrentJstTime()
+{
+   // JST is fixed at UTC+9 and does not observe daylight saving time.
+   return TimeGMT() + 9 * 60 * 60;
+}
+
+bool IsWeekendEntryBlocked()
+{
+   if(!InpUseWeekendEntryGuard)
+      return false;
+
+   MqlDateTime jst;
+   if(!TimeToStruct(CurrentJstTime(), jst))
+   {
+      Debug("Weekend guard blocked entry: unable to read JST time.");
+      return true;
+   }
+
+   // MqlDateTime day_of_week: 0=Sunday, 5=Friday, 6=Saturday.
+   if(jst.day_of_week == 6 || jst.day_of_week == 0)
+      return true;
+
+   if(jst.day_of_week == 5 &&
+      (jst.hour > 23 || (jst.hour == 23 && jst.min >= 59)))
+      return true;
+
+   return false;
+}
+
 bool OpenBuy(string reason)
 {
+   if(IsWeekendEntryBlocked())
+   {
+      Debug("BUY skipped by weekend guard. JST=" +
+            TimeToString(CurrentJstTime(), TIME_DATE | TIME_MINUTES));
+      return false;
+   }
+
    if(CountAllPositions() >= InpMaxPositions)
       return false;
 
@@ -677,6 +716,13 @@ bool OpenBuy(string reason)
 
 bool OpenSell(string reason)
 {
+   if(IsWeekendEntryBlocked())
+   {
+      Debug("SELL skipped by weekend guard. JST=" +
+            TimeToString(CurrentJstTime(), TIME_DATE | TIME_MINUTES));
+      return false;
+   }
+
    if(CountAllPositions() >= InpMaxPositions)
       return false;
 
