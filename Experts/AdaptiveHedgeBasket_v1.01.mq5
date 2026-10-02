@@ -62,12 +62,20 @@ input double InpNetTrailStrength      = 0.70;
 input double InpMinTrailMultiplier    = 0.40;
 
 // Optional legacy fixed TP. Used only when trailing is disabled.
-// Set 0 to disable.
+// Default 1.0 assumes InpLots=0.01. Set 0 to disable.
 input double InpBasketProfitMoney     = 1.0;
 
 // Unknown original loss-exit rule, therefore disabled by default.
 // Use a positive number to enable absolute-money stop.
 input double InpBasketLossMoney       = 0.0;
+
+// Basket loss controls.
+// These stops close the entire basket only while its floating PnL is negative.
+// Holding time is measured from the oldest open position managed by this EA.
+input bool   InpUseHoldingTimeStop    = true;
+input int    InpMaxHoldingMinutes     = 6;
+input bool   InpUsePositionCountStop = false;
+input int    InpPositionCountStop     = 100;
 
 // Safety / test controls
 input int    InpMaxPositions         = 9999999;
@@ -345,6 +353,17 @@ datetime EarliestOurPositionTime()
    }
 
    return earliest;
+}
+
+long BasketHoldingSeconds()
+{
+   datetime earliest = EarliestOurPositionTime();
+   datetime now = TimeCurrent();
+
+   if(earliest == 0 || now <= earliest)
+      return 0;
+
+   return (long)(now - earliest);
 }
 
 void ClearPersistentTrailingState()
@@ -1108,6 +1127,8 @@ int OnInit()
       InpSMA_Period <= 0 ||
       InpHedgeReleaseDistance < 0.0 ||
       InpMaxPositions <= 0 ||
+      (InpUseHoldingTimeStop && InpMaxHoldingMinutes <= 0) ||
+      (InpUsePositionCountStop && InpPositionCountStop <= 0) ||
       InpCloseRetrySeconds < 0 ||
       InpCloseMaxAttempts < 0)
    {
@@ -1233,6 +1254,39 @@ void OnTick()
          return;
       }
 
+      // Time-based stop: close a losing basket after the oldest position has
+      // been held for the configured number of minutes.
+      long holding_seconds = BasketHoldingSeconds();
+      long holding_limit_seconds = (long)InpMaxHoldingMinutes * 60;
+
+      if(InpUseHoldingTimeStop &&
+         pnl < 0.0 &&
+         holding_seconds >= holding_limit_seconds)
+      {
+         StartBasketClosing(
+            "TIME STOP held=" + (string)holding_seconds +
+            "s limit=" + (string)holding_limit_seconds +
+            "s pnl=" + DoubleToString(pnl, 2)
+         );
+         ProcessBasketClosing();
+         return;
+      }
+
+      // Position-count stop: close a losing basket when its number of open
+      // positions reaches the configured threshold.
+      if(InpUsePositionCountStop &&
+         pnl < 0.0 &&
+         total >= InpPositionCountStop)
+      {
+         StartBasketClosing(
+            "POSITION COUNT STOP positions=" + (string)total +
+            " limit=" + (string)InpPositionCountStop +
+            " pnl=" + DoubleToString(pnl, 2)
+         );
+         ProcessBasketClosing();
+         return;
+      }
+
       if(InpUseBasketTrailing)
       {
          if(CheckBasketTrailing(pnl))
@@ -1266,6 +1320,7 @@ void OnTick()
             "\nPeak: ", DoubleToString(g_peak_basket_profit, 2),
             "\nFloor: ", DoubleToString(g_trailing_floor, 2),
             "\nNetRatio: ", DoubleToString(CurrentNetPositionRatio(), 3),
+            "\nHeld: ", (string)holding_seconds, " sec",
             "\nB=", CountPositions(POSITION_TYPE_BUY),
             " S=", CountPositions(POSITION_TYPE_SELL)
          );

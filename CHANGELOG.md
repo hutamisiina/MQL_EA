@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Changed the legacy fixed basket profit default from 100.0 to 1.0.
+- Added an enabled-by-default holding-time loss stop with a six-minute default.
+- Added an optional position-count loss stop with a 100-position default threshold.
+
 ## 1.01 - 2026-10-01
 
 - Renamed the current EA to `AdaptiveHedgeBasket_v1.01.mq5`.
