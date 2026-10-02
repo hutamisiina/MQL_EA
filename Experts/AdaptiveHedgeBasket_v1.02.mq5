@@ -69,7 +69,7 @@ input double InpBasketLossMoney       = 0.0;
 // Basket loss controls.
 // These stops close the entire basket only while its floating PnL is negative.
 // Holding time is measured from the oldest open position managed by this EA.
-input bool   InpUseHoldingTimeStop    = true;
+input bool   InpUseHoldingTimeStop    = false;
 input int    InpMaxHoldingMinutes     = 17;
 input bool   InpUsePositionCountStop = false;
 input int    InpPositionCountStop     = 100;
@@ -78,7 +78,7 @@ input int    InpPositionCountStop     = 100;
 input int    InpMaxPositions         = 9999999;
 // Block new entries from Friday 23:59 JST through Sunday 23:59 JST.
 // Existing positions continue to be managed and closed as usual.
-input bool   InpUseWeekendEntryGuard = true;
+input bool   InpUseWeekendEntryGuard = false;
 input bool   InpWarnIfChartNotM1     = true;
 input bool   InpPrintDebug           = true;
 
