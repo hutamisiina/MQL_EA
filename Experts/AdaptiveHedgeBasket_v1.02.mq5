@@ -1,7 +1,7 @@
 #property strict
 #property copyright "hutamisiina"
-#property version   "1.01"
-#property description "Adaptive Hedge Basket - EMA initial direction, adaptive trailing and Close By management"
+#property version   "1.02"
+#property description "Adaptive Breakout Basket - add only when price breaks recent M1 highs or lows"
 
 #include <Trade/Trade.mqh>
 
@@ -13,18 +13,15 @@ CTrade trade;
 input long   InpMagic                = 36291761;
 input double InpLots                 = 0.01;
 
-// Basket startup:
-// 1st M1: enter in the EMA direction.
-// 2nd M1: optionally add one BUY and one SELL to create an initial hedge layer.
-input bool   InpUseInitialHedge      = false;
-
-// Direction logic
-input int    InpEMA_Period           = 10;
-input int    InpSMA_Period           = 7;
-
-// When BuyCount == SellCount, wait until |Close[1]-SMA| >= threshold.
-// A distance near 0.8 was used during the original XAUUSD M1 tests.
-input double InpHedgeReleaseDistance = 0.80;
+// Price-breakout entry logic.
+// The live Bid is compared with the preceding N fully closed M1 bars.
+// Break above their highest high -> BUY. Break below their lowest low -> SELL.
+// No position is added merely because another minute has elapsed.
+input int    InpBreakoutLookbackBars      = 3;
+input double InpBreakoutBufferPrice       = 0.0;
+// Require this distance from the latest same-side entry before adding again.
+// Price-unit input avoids a 10x difference between 2- and 3-digit gold quotes.
+input double InpMinEntryDistancePrice     = 0.80;
 
 // Basket profit trailing.
 // Once basket profit reaches TrailStartProfit, do NOT close immediately.
@@ -97,13 +94,6 @@ input bool   InpUseCloseByForHedge    = true;
 // =========================
 // State
 // =========================
-datetime g_last_bar_time = 0;
-datetime g_basket_start_bar = 0;
-int      g_basket_age_bars = 0;
-
-int g_ema_handle = INVALID_HANDLE;
-int g_sma_handle = INVALID_HANDLE;
-
 // Persistent basket-close state
 bool     g_closing_basket      = false;
 datetime g_last_close_attempt  = 0;
@@ -121,7 +111,7 @@ double g_trailing_floor        = 0.0;
 void Debug(string msg)
 {
    if(InpPrintDebug)
-      Print("[HypothesisEA] ", msg);
+      Print("[BreakoutBasket] ", msg);
 }
 
 bool IsOurPosition()
@@ -266,29 +256,6 @@ bool HasEnoughMargin(ENUM_ORDER_TYPE order_type, double volume)
    if(required_margin > free_margin)
    {
       Debug("Not enough free margin. Required=" +
-            DoubleToString(required_margin, 2) +
-            " free=" + DoubleToString(free_margin, 2));
-      return false;
-   }
-
-   return true;
-}
-
-bool HasEnoughMarginForInitialHedge(double volume)
-{
-   double buy_margin = 0.0;
-   double sell_margin = 0.0;
-
-   if(!CalculateRequiredMargin(ORDER_TYPE_BUY, volume, buy_margin) ||
-      !CalculateRequiredMargin(ORDER_TYPE_SELL, volume, sell_margin))
-      return false;
-
-   double required_margin = buy_margin + sell_margin;
-   double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-
-   if(required_margin > free_margin)
-   {
-      Debug("Initial hedge skipped: not enough free margin. Required=" +
             DoubleToString(required_margin, 2) +
             " free=" + DoubleToString(free_margin, 2));
       return false;
@@ -605,8 +572,6 @@ void FinishBasketClosing()
    g_close_attempts = 0;
    g_last_close_attempt = 0;
    g_close_reason = "";
-   g_basket_start_bar = 0;
-   g_basket_age_bars = 0;
    ResetTrailingState();
    Debug("BASKET CLOSE MODE FINISHED");
 }
@@ -751,295 +716,127 @@ bool OpenSell(string reason)
    return ok;
 }
 
-bool TicketWasPresent(ulong ticket, ulong &tickets[])
+bool ReadBreakoutLevels(double &previous_high, double &previous_low)
 {
-   for(int i = 0; i < ArraySize(tickets); ++i)
+   previous_high = 0.0;
+   previous_low = 0.0;
+
+   int bars_needed = InpBreakoutLookbackBars;
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+
+   // Start at shift 1 so the still-forming M1 candle never changes the range.
+   if(CopyRates(_Symbol, PERIOD_M1, 1, bars_needed, rates) != bars_needed)
    {
-      if(tickets[i] == ticket)
-         return true;
+      Debug("Breakout levels skipped: insufficient M1 history.");
+      return false;
    }
 
-   return false;
+   previous_high = rates[0].high;
+   previous_low = rates[0].low;
+
+   for(int i = 1; i < bars_needed; ++i)
+   {
+      previous_high = MathMax(previous_high, rates[i].high);
+      previous_low = MathMin(previous_low, rates[i].low);
+   }
+
+   return true;
 }
 
-ulong FindNewPositionTicket(ENUM_POSITION_TYPE type, ulong &tickets_before[])
+bool LatestSameSideEntryPrice(ENUM_POSITION_TYPE type, double &price)
 {
-   ulong newest_ticket = 0;
-   long newest_time_msc = -1;
+   price = 0.0;
+   long latest_time_msc = -1;
 
    for(int i = PositionsTotal() - 1; i >= 0; --i)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket == 0 ||
-         TicketWasPresent(ticket, tickets_before) ||
-         !PositionSelectByTicket(ticket) ||
-         !IsOurPosition() ||
-         (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) != type)
+      if(ticket == 0 || !PositionSelectByTicket(ticket) || !IsOurPosition())
+         continue;
+
+      if((ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) != type)
          continue;
 
       long time_msc = PositionGetInteger(POSITION_TIME_MSC);
-      if(time_msc > newest_time_msc)
+      if(time_msc > latest_time_msc)
       {
-         newest_time_msc = time_msc;
-         newest_ticket = ticket;
+         latest_time_msc = time_msc;
+         price = PositionGetDouble(POSITION_PRICE_OPEN);
       }
    }
 
-   return newest_ticket;
+   return (latest_time_msc >= 0);
 }
 
-bool CloseSinglePositionConfirmed(ulong ticket, string reason)
+bool EntryDistanceIsEnough(ENUM_POSITION_TYPE type, double signal_price)
 {
-   if(ticket == 0 || !PositionSelectByTicket(ticket))
+   if(InpMinEntryDistancePrice <= 0.0)
       return true;
 
-   bool request_ok = trade.PositionClose(ticket);
-   bool executed = request_ok && TradeRetcodeExecuted();
+   double latest_price = 0.0;
+   if(!LatestSameSideEntryPrice(type, latest_price))
+      return true;
 
-   if(!executed)
-   {
-      DebugTradeFailure(reason + " ticket=" + (string)ticket);
-      return false;
-   }
+   double required_distance = InpMinEntryDistancePrice;
+   double actual_distance =
+      (type == POSITION_TYPE_BUY) ?
+      (signal_price - latest_price) :
+      (latest_price - signal_price);
 
-   if(PositionSelectByTicket(ticket))
-   {
-      Debug(reason + " incomplete ticket=" + (string)ticket);
-      return false;
-   }
+   if(actual_distance + (_Point * 0.1) >= required_distance)
+      return true;
 
-   Debug(reason + " executed ticket=" + (string)ticket);
-   return true;
-}
-
-bool OpenInitialHedgeLayer()
-{
-   int total = CountAllPositions();
-   if(total + 2 > InpMaxPositions)
-   {
-      Debug("Initial hedge skipped: two free position slots are required.");
-      return false;
-   }
-
-   string volume_message;
-   if(!ValidateOrderVolume(InpLots, volume_message))
-   {
-      Debug("Initial hedge skipped: " + volume_message);
-      return false;
-   }
-
-   if(!HasEnoughMarginForInitialHedge(InpLots))
-      return false;
-
-   ulong buy_tickets_before[];
-   ulong sell_tickets_before[];
-   CollectOurTickets(POSITION_TYPE_BUY, buy_tickets_before);
-   CollectOurTickets(POSITION_TYPE_SELL, sell_tickets_before);
-
-   if(!OpenBuy("HYP_SECOND_BUY"))
-      return false;
-
-   ulong new_buy_ticket =
-      FindNewPositionTicket(POSITION_TYPE_BUY, buy_tickets_before);
-   double buy_volume = trade.ResultVolume();
-
-   if(new_buy_ticket == 0 ||
-      MathAbs(buy_volume - InpLots) > 0.0000001)
-   {
-      Debug("Initial hedge BUY was not fully opened. Rolling it back.");
-      bool rollback_ok =
-         (new_buy_ticket != 0 &&
-          CloseSinglePositionConfirmed(new_buy_ticket,
-                                       "Initial hedge BUY rollback"));
-
-      if(!rollback_ok)
-         StartBasketClosing("INITIAL HEDGE BUY ROLLBACK FAILED");
-
-      return false;
-   }
-
-   if(!OpenSell("HYP_SECOND_SELL"))
-   {
-      Debug("Initial hedge SELL failed. Rolling back BUY.");
-      if(!CloseSinglePositionConfirmed(new_buy_ticket,
-                                       "Initial hedge BUY rollback"))
-         StartBasketClosing("INITIAL HEDGE BUY ROLLBACK FAILED");
-
-      return false;
-   }
-
-   ulong new_sell_ticket =
-      FindNewPositionTicket(POSITION_TYPE_SELL, sell_tickets_before);
-   double sell_volume = trade.ResultVolume();
-
-   if(new_sell_ticket == 0 ||
-      MathAbs(sell_volume - InpLots) > 0.0000001)
-   {
-      Debug("Initial hedge SELL was not fully opened. Rolling back both legs.");
-      bool sell_rollback_ok =
-         (new_sell_ticket != 0 &&
-          CloseSinglePositionConfirmed(new_sell_ticket,
-                                       "Initial hedge SELL rollback"));
-      bool buy_rollback_ok =
-         CloseSinglePositionConfirmed(new_buy_ticket,
-                                      "Initial hedge BUY rollback");
-
-      if(!sell_rollback_ok || !buy_rollback_ok)
-         StartBasketClosing("INITIAL HEDGE ROLLBACK FAILED");
-
-      return false;
-   }
-
-   Debug("Initial hedge layer completed.");
-   return true;
-}
-
-bool ReadPreviousIndicators(double &close1, double &ema1, double &sma1)
-{
-   close1 = iClose(_Symbol, PERIOD_M1, 1);
-   if(close1 == 0.0)
-      return false;
-
-   double ema_buf[1];
-   double sma_buf[1];
-
-   if(CopyBuffer(g_ema_handle, 0, 1, 1, ema_buf) != 1)
-      return false;
-
-   if(CopyBuffer(g_sma_handle, 0, 1, 1, sma_buf) != 1)
-      return false;
-
-   ema1 = ema_buf[0];
-   sma1 = sma_buf[0];
-
-   return true;
-}
-
-int DirectionFromEMA(double close1, double ema1)
-{
-   if(close1 > ema1)
-      return 1;
-
-   if(close1 < ema1)
-      return -1;
-
-   return 0;
-}
-
-bool IsNewM1Bar()
-{
-   datetime t = iTime(_Symbol, PERIOD_M1, 0);
-
-   if(t == 0)
-      return false;
-
-   if(t == g_last_bar_time)
-      return false;
-
-   g_last_bar_time = t;
-   return true;
-}
-
-void StartNewBasket()
-{
-   double close1, ema1, sma1;
-
-   if(!ReadPreviousIndicators(close1, ema1, sma1))
-   {
-      Debug("Start basket skipped: indicator read failed");
-      return;
-   }
-
-   int direction = DirectionFromEMA(close1, ema1);
-
-   if(direction > 0)
-   {
-      if(OpenBuy("HYP_START_EMA_BUY"))
-      {
-         g_basket_start_bar = g_last_bar_time;
-         g_basket_age_bars = 1;
-      }
-   }
-   else if(direction < 0)
-   {
-      if(OpenSell("HYP_START_EMA_SELL"))
-      {
-         g_basket_start_bar = g_last_bar_time;
-         g_basket_age_bars = 1;
-      }
-   }
-   else
-   {
-      Debug("Start basket skipped: Close[1] == EMA");
-   }
+   Debug("Breakout entry skipped: same-side distance=" +
+         DoubleToString(actual_distance, _Digits) +
+         " required=" + DoubleToString(required_distance, _Digits));
+   return false;
 }
 
 void ProcessBasket()
 {
-   int buys  = CountPositions(POSITION_TYPE_BUY);
-   int sells = CountPositions(POSITION_TYPE_SELL);
-   int total = buys + sells;
+   double previous_high = 0.0;
+   double previous_low = 0.0;
 
-   if(total == 0)
-   {
-      StartNewBasket();
+   if(!ReadBreakoutLevels(previous_high, previous_low))
       return;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol, tick) || tick.bid <= 0.0 || tick.ask <= 0.0)
+      return;
+
+   double buffer = InpBreakoutBufferPrice;
+   bool high_break = (tick.bid > previous_high + buffer);
+   bool low_break = (tick.bid < previous_low - buffer);
+
+   if(high_break == low_break)
+      return;
+
+   bool basket_was_empty = (CountAllPositions() == 0);
+   bool opened = false;
+
+   if(high_break &&
+      EntryDistanceIsEnough(POSITION_TYPE_BUY, tick.ask))
+   {
+      opened = OpenBuy(basket_was_empty ?
+                       "HYP_START_HIGH_BREAK_BUY" :
+                       "HYP_HIGH_BREAK_BUY");
+   }
+   else if(low_break &&
+           EntryDistanceIsEnough(POSITION_TYPE_SELL, tick.bid))
+   {
+      opened = OpenSell(basket_was_empty ?
+                        "HYP_START_LOW_BREAK_SELL" :
+                        "HYP_LOW_BREAK_SELL");
    }
 
-   g_basket_age_bars++;
-
-   // Optional initial hedge layer:
-   // on the second minute, add one BUY and one SELL.
-   if(InpUseInitialHedge && g_basket_age_bars == 2)
-   {
-      OpenInitialHedgeLayer();
+   if(!opened)
       return;
-   }
 
-   double close1, ema1, sma1;
-   if(!ReadPreviousIndicators(close1, ema1, sma1))
-   {
-      Debug("Indicator read failed");
-      return;
-   }
-
-   int direction = DirectionFromEMA(close1, ema1);
-
-   // If fully hedged, stay idle until short-term movement becomes large enough.
-   if(buys == sells)
-   {
-      double deviation = close1 - sma1;
-
-      Debug(
-         "FULL_HEDGE B=" + (string)buys +
-         " S=" + (string)sells +
-         " Close1=" + DoubleToString(close1, _Digits) +
-         " SMA=" + DoubleToString(sma1, _Digits) +
-         " dev=" + DoubleToString(deviation, 2)
-      );
-
-      if(MathAbs(deviation) < InpHedgeReleaseDistance)
-      {
-         Debug("FULL_HEDGE -> WAIT");
-         return;
-      }
-
-      // For the release direction, observed data was consistent with
-      // short-term MA side. Use EMA10 direction here.
-      if(direction > 0)
-         OpenBuy("HYP_HEDGE_RELEASE_BUY");
-      else if(direction < 0)
-         OpenSell("HYP_HEDGE_RELEASE_SELL");
-
-      return;
-   }
-
-   // If net exposure exists, observed EA usually added one position per M1 bar
-   // in the short-term trend direction.
-   if(direction > 0)
-      OpenBuy("HYP_TREND_BUY");
-   else if(direction < 0)
-      OpenSell("HYP_TREND_SELL");
+   Debug((high_break ? "HIGH BREAK BUY" : "LOW BREAK SELL") +
+         " bid=" + DoubleToString(tick.bid, _Digits) +
+         " previousHigh=" + DoubleToString(previous_high, _Digits) +
+         " previousLow=" + DoubleToString(previous_low, _Digits));
 }
 
 double SumPositionVolume(ENUM_POSITION_TYPE type)
@@ -1169,9 +966,9 @@ bool CheckBasketTrailing(double pnl)
 int OnInit()
 {
    if(InpLots <= 0.0 ||
-      InpEMA_Period <= 0 ||
-      InpSMA_Period <= 0 ||
-      InpHedgeReleaseDistance < 0.0 ||
+      InpBreakoutLookbackBars < 1 ||
+      InpBreakoutBufferPrice < 0.0 ||
+      InpMinEntryDistancePrice < 0.0 ||
       InpMaxPositions <= 0 ||
       (InpUseHoldingTimeStop && InpMaxHoldingMinutes <= 0) ||
       (InpUsePositionCountStop && InpPositionCountStop <= 0) ||
@@ -1194,19 +991,8 @@ int OnInit()
       return INIT_FAILED;
    }
 
-   g_ema_handle = iMA(_Symbol, PERIOD_M1, InpEMA_Period, 0, MODE_EMA, PRICE_CLOSE);
-   g_sma_handle = iMA(_Symbol, PERIOD_M1, InpSMA_Period, 0, MODE_SMA, PRICE_CLOSE);
-
-   if(g_ema_handle == INVALID_HANDLE || g_sma_handle == INVALID_HANDLE)
-   {
-      Print("Failed to create MA handles.");
-      return INIT_FAILED;
-   }
-
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetTypeFillingBySymbol(_Symbol);
-
-   g_last_bar_time = iTime(_Symbol, PERIOD_M1, 0);
 
    // If tester/terminal/VPS restarts with an existing basket, continue it.
    // Prefer the persisted historical peak/floor. If no valid saved state is
@@ -1214,8 +1000,6 @@ int OnInit()
    // configured activation threshold.
    if(CountAllPositions() > 0)
    {
-      g_basket_age_bars = 3;
-
       double pnl = BasketProfit();
 
       if(InpUseBasketTrailing && InpTrailStartProfit > 0.0)
@@ -1264,12 +1048,6 @@ void OnDeinit(const int reason)
 
    if(g_trailing_active && CountAllPositions() > 0)
       SavePersistentTrailingState();
-
-   if(g_ema_handle != INVALID_HANDLE)
-      IndicatorRelease(g_ema_handle);
-
-   if(g_sma_handle != INVALID_HANDLE)
-      IndicatorRelease(g_sma_handle);
 }
 
 void OnTick()
@@ -1373,9 +1151,7 @@ void OnTick()
       }
    }
 
-   // Entries are evaluated once per new M1 bar.
-   if(!IsNewM1Bar())
-      return;
-
+   // Entry timing is price-driven. The closed M1 range supplies the breakout
+   // levels, while the minimum same-side distance prevents tick-by-tick spam.
    ProcessBasket();
 }

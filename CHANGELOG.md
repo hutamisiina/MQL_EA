@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.02 - 2026-10-03
 
+- Replaced the EMA/SMA time-driven entry logic with price-driven M1 range breakouts.
+- Added BUY only when live Bid breaks above the preceding closed-M1 range high.
+- Added SELL only when live Bid breaks below the preceding closed-M1 range low.
+- Added configurable breakout lookback, price-unit breakout buffer, and minimum same-side entry distance.
+- Changed empty-basket behavior to wait for the first confirmed price breakout instead of opening immediately from EMA direction.
+- Removed the optional initial hedge layer so every new entry now requires a price breakout.
+- Renamed the current EA to `AdaptiveHedgeBasket_v1.02.mq5`.
 - Changed the legacy fixed basket profit default from 100.0 to 1.0.
 - Added an enabled-by-default holding-time loss stop with a 17-minute default.
 - Added an optional position-count loss stop with a 100-position default threshold.
