@@ -20,9 +20,9 @@ MetaTrader 5（MT5）向けの、複数ポジションをまとめて管理す�
 - 決済に失敗した場合の再試行処理
 - 発注結果をサーバーのリターンコードまで確認
 - MT5／VPS再起動後もトレーリングのピークと下限を復元
-- 最古ポジションの保有時間によるバスケット損切り
-- 保有ポジション数による任意のバスケット損切り
-- 金曜23:59（JST）以降の週末新規エントリーを停止
+- 最古ポジションの保有時間による任意nのバスケット損切り(OFF)
+- 保有ポジション数による任意のバスケット損切り(初期値OFF)
+- 金曜23:59（JST）以降の週末新規エントリーを停止する機能は初期値OFF
 - Magic Numberにより、このEAのポジションだけを管理
 
 ## 売買ロジックの概要
@@ -71,12 +71,12 @@ MQL_EA/
 | `InpTrailPercent` | `20.0` | 利益ピークに対するトレーリング幅（%） |
 | `InpBasketProfitMoney` | `1.0` | トレーリング無効時だけ使用する固定利益確定額。初期値は0.01 lot基準 |
 | `InpBasketLossMoney` | `0.0` | バスケット損失上限。`0`は無効 |
-| `InpUseHoldingTimeStop` | `true` | 含み損バスケットの保有時間による損切りを有効化 |
+| `InpUseHoldingTimeStop` | `false` | 含み損バスケットの保有時間による損切りを有効化 |
 | `InpMaxHoldingMinutes` | `17` | 最古ポジションから損切りまでの最大保有時間（分） |
 | `InpUsePositionCountStop` | `false` | 含み損バスケットの保有本数による損切りを有効化 |
 | `InpPositionCountStop` | `100` | 保有本数損切りを発動するポジション数 |
 | `InpMaxPositions` | `9999999` | このEAが保有できる最大ポジション数。初期値は実質的に上限を設けない設定 |
-| `InpUseWeekendEntryGuard` | `true` | 金曜23:59（JST）から日曜23:59（JST）まで新規エントリーを停止 |
+| `InpUseWeekendEntryGuard` | `false` | 金曜23:59（JST）から日曜23:59（JST）まで新規エントリーを停止 |
 | `InpUseCloseByForHedge` | `true` | 両建て部分をClose Byで相殺する |
 
 `InpBasketProfitMoney` は、`InpUseBasketTrailing=false` の場合のみ固定利益確定として使用されます。`InpLots` を変更する場合は、`InpTrailStartProfit` と同様に調整してください。
