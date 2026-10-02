@@ -73,7 +73,7 @@ input double InpBasketLossMoney       = 0.0;
 // These stops close the entire basket only while its floating PnL is negative.
 // Holding time is measured from the oldest open position managed by this EA.
 input bool   InpUseHoldingTimeStop    = true;
-input int    InpMaxHoldingMinutes     = 6;
+input int    InpMaxHoldingMinutes     = 17;
 input bool   InpUsePositionCountStop = false;
 input int    InpPositionCountStop     = 100;
 
