@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.03 - 2026-10-03
+
+- Limited entries to one position per M1 bar across BUY and SELL.
+- Persisted the last successful entry bar so restarting MT5 or the EA cannot reopen repeatedly in the same bar.
+
 ## 1.02 - 2026-10-03
 
 - Replaced the EMA/SMA time-driven entry logic with price-driven M1 range breakouts.

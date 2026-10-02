@@ -1,6 +1,6 @@
 #property strict
 #property copyright "hutamisiina"
-#property version   "1.02"
+#property version   "1.03"
 #property description "Adaptive Breakout Basket - add only when price breaks recent M1 highs or lows"
 
 #include <Trade/Trade.mqh>
@@ -94,6 +94,9 @@ input bool   InpUseCloseByForHedge    = true;
 // =========================
 // State
 // =========================
+// At most one successful entry is allowed per M1 bar across both directions.
+datetime g_last_entry_bar_time = 0;
+
 // Persistent basket-close state
 bool     g_closing_basket      = false;
 datetime g_last_close_attempt  = 0;
@@ -305,6 +308,11 @@ string TrailingStateKey(string field)
    return "AHB_" + (string)TrailingStateScopeHash() + "_" + field;
 }
 
+string LastEntryBarStateKey()
+{
+   return "AHB_" + (string)TrailingStateScopeHash() + "_entrybar";
+}
+
 datetime EarliestOurPositionTime()
 {
    datetime earliest = 0;
@@ -323,6 +331,61 @@ datetime EarliestOurPositionTime()
    }
 
    return earliest;
+}
+
+datetime LatestOurPositionTime()
+{
+   datetime latest = 0;
+
+   for(int i = PositionsTotal() - 1; i >= 0; --i)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket) || !IsOurPosition())
+         continue;
+
+      datetime position_time =
+         (datetime)PositionGetInteger(POSITION_TIME);
+
+      if(position_time > latest)
+         latest = position_time;
+   }
+
+   return latest;
+}
+
+void RestoreLastEntryBarState()
+{
+   datetime current_bar = iTime(_Symbol, PERIOD_M1, 0);
+   if(current_bar == 0)
+      return;
+
+   string key = LastEntryBarStateKey();
+   if(GlobalVariableCheck(key))
+   {
+      datetime saved_bar = (datetime)GlobalVariableGet(key);
+      if(saved_bar <= current_bar)
+         g_last_entry_bar_time = saved_bar;
+   }
+
+   // This also protects the first startup after upgrading from v1.01/v1.02,
+   // before the persistent entry-bar key exists.
+   datetime latest_position_time = LatestOurPositionTime();
+   if(latest_position_time >= current_bar)
+      g_last_entry_bar_time = current_bar;
+
+   if(g_last_entry_bar_time == current_bar)
+   {
+      GlobalVariableSet(key, (double)current_bar);
+      GlobalVariablesFlush();
+      Debug("Current M1 bar already has an entry. Further entries are blocked.");
+   }
+}
+
+void MarkEntryForBar(datetime bar_time)
+{
+   g_last_entry_bar_time = bar_time;
+   GlobalVariableSet(LastEntryBarStateKey(), (double)bar_time);
+   GlobalVariablesFlush();
 }
 
 long BasketHoldingSeconds()
@@ -795,6 +858,10 @@ bool EntryDistanceIsEnough(ENUM_POSITION_TYPE type, double signal_price)
 
 void ProcessBasket()
 {
+   datetime current_bar = iTime(_Symbol, PERIOD_M1, 0);
+   if(current_bar == 0 || g_last_entry_bar_time == current_bar)
+      return;
+
    double previous_high = 0.0;
    double previous_low = 0.0;
 
@@ -832,6 +899,8 @@ void ProcessBasket()
 
    if(!opened)
       return;
+
+   MarkEntryForBar(current_bar);
 
    Debug((high_break ? "HIGH BREAK BUY" : "LOW BREAK SELL") +
          " bid=" + DoubleToString(tick.bid, _Digits) +
@@ -993,6 +1062,7 @@ int OnInit()
 
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetTypeFillingBySymbol(_Symbol);
+   RestoreLastEntryBarState();
 
    // If tester/terminal/VPS restarts with an existing basket, continue it.
    // Prefer the persisted historical peak/floor. If no valid saved state is
